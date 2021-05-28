@@ -1,5 +1,6 @@
 ## python 3
 # pip install plexapi
+# 更多中文插件请访问plexmedia.cn
 
 import urllib
 import http.client
