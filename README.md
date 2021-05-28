@@ -6,3 +6,5 @@ plex的中文电影默认排序是按照笔画数排的，对检索中文电影�
 #需要安装plexapi
 
 pip install plexapi
+
+更多PLEX中文插件请访问plexmedia.cn
