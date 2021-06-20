@@ -1,11 +1,13 @@
 ## python 3
 # pip install plexapi
+# pip install pypinyin
 # 更多中文插件请访问plexmedia.cn
 
 import urllib
 import http.client
 import json
 import sys
+import pypinyin
 from plexapi.server import PlexServer
 from plexapi.myplex import MyPlexAccount
 from plexapi.myplex import MyPlexDevice
