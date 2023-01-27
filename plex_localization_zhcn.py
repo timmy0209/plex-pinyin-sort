@@ -128,12 +128,12 @@ class PLEX:
 
 if __name__ == '__main__':
 
-    URL = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://192.168.168.1:32400"
-    TOKEN = input('请输入你的 TOKEN：') or "97TexhuA_rnUbNJgpFSu"
+    URL = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
+    TOKEN = input('请输入你的 TOKEN：')
     TYPE = input('请输入操作的库类型，1为电影，2为电视剧：') or 1
 
     server = PLEX(URL, TOKEN, TYPE)
     print(server.listLibrary())
-    sectionId = input("选择要操作的库的 ID 数字:") or 1
+    sectionId = input("选择要操作的库的 ID 数字:")
 
     server.LoopAll(sectionId)
