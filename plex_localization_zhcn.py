@@ -3,17 +3,28 @@
 # pip install pypinyin
 # 更多中文插件请访问plexmedia.cn
 
-import http.client
-import json
-import xmltodict as xmltodict
 import urllib
 from urllib import parse
 import pypinyin
 from plexapi.server import PlexServer
+import http.client
+import json
+import xmltodict as xmltodict
+
+
+tags = {
+    "Anime": "动画",     "Action": "动作",     "Mystery": "悬疑",     "Tv Movie":  "电视",     "Animation":       "动画",
+    "Crime": "犯罪",     "Family": "家庭",     "Fantasy": "奇幻",     "Disaster":  "灾难",     "Adventure":       "冒险",
+    "Short": "短片",     "Horror": "恐怖",     "History": "历史",     "Suspense":  "悬疑",     "Biography":       "传记",
+    "Sport": "体育",     "Comedy": "喜剧",     "Romance": "爱情",     "Thriller":  "惊悚",     "Documentary":     "纪录",
+    "Music": "音乐",     "Sci-Fi": "科幻",     "Western": "西部",     "Children":  "儿童",     "Martial Arts":    "功夫",
+    "Drama": "剧情",     "War":    "战争",     "Musical": "音乐",     "Film-noir": "黑色",     "Science Fiction": "科幻",
+    "Food":  "食物",     "War & Politics": "战争与政治"
+}
 
 
 # 服务器助手函数
-def main(token, host, path='', method='GET', get_form_plextv=False, params=None):
+def fetchPlexApi(token, host, path='', method='GET', get_form_plextv=False, params=None):
     headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
     if get_form_plextv:
         url = 'plex.tv'
@@ -56,17 +67,6 @@ def main(token, host, path='', method='GET', get_form_plextv=False, params=None)
     except Exception as e:
         connection.close()
         print("Error fetching from Plex API: {err}".format(err=e))
-        
-
-tags = {
-    "Anime": "动画",     "Action": "动作",     "Mystery": "悬疑",     "Tv Movie":  "电视",     "Animation":       "动画",
-    "Crime": "犯罪",     "Family": "家庭",     "Fantasy": "奇幻",     "Disaster":  "灾难",     "Adventure":       "冒险",
-    "Short": "短片",     "Horror": "恐怖",     "History": "历史",     "Suspense":  "悬疑",     "Biography":       "传记",
-    "Sport": "体育",     "Comedy": "喜剧",     "Romance": "爱情",     "Thriller":  "惊悚",     "Documentary":     "纪录",
-    "Music": "音乐",     "Sci-Fi": "科幻",     "Western": "西部",     "Children":  "儿童",     "Martial Arts":    "功夫",
-    "Drama": "剧情",     "War":    "战争",     "Musical": "音乐",     "Film-noir": "黑色",     "Science Fiction": "科幻",
-    "Food":  "食物",     "War & Politics": "战争与政治"
-}
 
 
 def isChinese(text):
@@ -119,7 +119,7 @@ class PLEX:
         sorttitle = convertToPinyin(title)
         print(f"{title}    : {sorttitle}")
         sorttitle = urllib.parse.quote(sorttitle.encode('utf-8'))
-        fetchPlexApi.main(
+        fetchPlexApi(
             host=self.host,
             token=self.token,
             path=f"/library/sections/{libraryid}/all?"
@@ -141,7 +141,7 @@ class PLEX:
                 path = f"/library/sections/{libraryid}/all?" \
                        f"type=1&id={ratingkey}&" \
                        f"genre%5B2%5D.tag.tag={zh_query}&genre%5B%5D.tag.tag-={enggenre}&"
-                fetchPlexApi.main(self.token, self.host, path, "PUT")
+                fetchPlexApi(self.token, self.host, path, "PUT")
             else:
                 print(f"请在 TAGS 字典中，为 {enggenre} 标签添加对应的中文。")
 
@@ -153,7 +153,7 @@ class PLEX:
         while todo != 0:
             path = f'/library/sections/{libraryid}/all?' \
                    f'type={self.actionType}&X-Plex-Container-Start={start}&X-Plex-Container-Size={size}'
-            metadata: dict = fetchPlexApi.main(self.token, self.host, path)
+            metadata: dict = fetchPlexApi(self.token, self.host, path)
 
             total_size = metadata["MediaContainer"]["totalSize"]
             offset = metadata["MediaContainer"]["offset"]
@@ -184,3 +184,4 @@ if __name__ == '__main__':
     sectionId = input("选择要操作的库的 ID 数字:")
 
     server.LoopAll(sectionId)
+
