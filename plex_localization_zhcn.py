@@ -43,7 +43,7 @@ def convertToPinyin(text):
 
 class PLEX:
 
-    def __init__(self, host: str, token: str, actionType: int = 1):
+    def __init__(self, host: str, token: str, actionType: int):
         """
         :param host: 可访问的 plex 服务器地址。例如 http://127.0.0.1:32400/
         :param token: 服务器的 token
@@ -57,11 +57,12 @@ class PLEX:
         """
         列出库。
         """
+        sections = None
         plex = PlexServer(self.host, self.token)
-        sections = [None]
-        if self.actionType == 1:
+        print(self.actionType)
+        if int(self.actionType) == 1:
             sections = [section for section in plex.library.sections() if section.type == "movie"]
-        else:
+        elif int(self.actionType) == 2:
             sections = [section for section in plex.library.sections() if section.type == "show"]
         return sections
 
