@@ -3,12 +3,60 @@
 # pip install pypinyin
 # 更多中文插件请访问plexmedia.cn
 
+import http.client
+import json
+import xmltodict as xmltodict
 import urllib
 from urllib import parse
 import pypinyin
 from plexapi.server import PlexServer
-import fetchPlexApi
 
+
+# 服务器助手函数
+def main(token, host, path='', method='GET', get_form_plextv=False, params=None):
+    headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
+    if get_form_plextv:
+        url = 'plex.tv'
+        connection = http.client.HTTPSConnection(url)
+    else:
+        url = host.rstrip('/').replace('http://', '')
+        connection = http.client.HTTPConnection(url)
+    try:
+        if method.upper() == 'GET':
+            pass
+        elif method.upper() == 'POST':
+            headers.update({'Content-type': 'application/x-www-form-urlencoded'})
+            pass
+        elif method.upper() == 'PUT':
+            pass
+        elif method.upper() == 'DELETE':
+            pass
+        else:
+            print("Invalid request method provided: {method}".format(method=method))
+            connection.close()
+            return
+
+        connection.request(method.upper(), path, params, headers)
+        response = connection.getresponse()
+        r = response.read()
+        contenttype = response.getheader('Content-Type')
+        # status = response.status
+        connection.close()
+
+        if response and len(r):
+            if 'application/json' in contenttype:
+                return json.loads(r)
+            elif 'application/xml' in contenttype:
+                return xmltodict.parse(r)
+            else:
+                return r
+        else:
+            return r
+
+    except Exception as e:
+        connection.close()
+        print("Error fetching from Plex API: {err}".format(err=e))
+        
 
 tags = {
     "Anime": "动画",     "Action": "动作",     "Mystery": "悬疑",     "Tv Movie":  "电视",     "Animation":       "动画",
