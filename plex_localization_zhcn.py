@@ -1,16 +1,9 @@
 ## python 3
-# pip install plexapi
-# pip install pypinyin
-# 更多中文插件请访问plexmedia.cn
-
 import urllib
 from urllib import parse
 import pypinyin
 from plexapi.server import PlexServer
-import http.client
-import json
-import xmltodict as xmltodict
-
+import requests
 
 tags = {
     "Anime": "动画",     "Action": "动作",     "Mystery": "悬疑",     "Tv Movie":  "电视",     "Animation":       "动画",
@@ -21,52 +14,6 @@ tags = {
     "Drama": "剧情",     "War":    "战争",     "Musical": "音乐",     "Film-noir": "黑色",     "Science Fiction": "科幻",
     "Food":  "食物",     "War & Politics": "战争与政治"
 }
-
-
-# 服务器助手函数
-def fetchPlexApi(token, host, path='', method='GET', get_form_plextv=False, params=None):
-    headers = {'X-Plex-Token': token, 'Accept': 'application/json'}
-    if get_form_plextv:
-        url = 'plex.tv'
-        connection = http.client.HTTPSConnection(url)
-    else:
-        url = host.rstrip('/').replace('http://', '')
-        connection = http.client.HTTPConnection(url)
-    try:
-        if method.upper() == 'GET':
-            pass
-        elif method.upper() == 'POST':
-            headers.update({'Content-type': 'application/x-www-form-urlencoded'})
-            pass
-        elif method.upper() == 'PUT':
-            pass
-        elif method.upper() == 'DELETE':
-            pass
-        else:
-            print("Invalid request method provided: {method}".format(method=method))
-            connection.close()
-            return
-
-        connection.request(method.upper(), path, params, headers)
-        response = connection.getresponse()
-        r = response.read()
-        contenttype = response.getheader('Content-Type')
-        # status = response.status
-        connection.close()
-
-        if response and len(r):
-            if 'application/json' in contenttype:
-                return json.loads(r)
-            elif 'application/xml' in contenttype:
-                return xmltodict.parse(r)
-            else:
-                return r
-        else:
-            return r
-
-    except Exception as e:
-        connection.close()
-        print("Error fetching from Plex API: {err}".format(err=e))
 
 
 def isChinese(text):
@@ -119,12 +66,11 @@ class PLEX:
         sorttitle = convertToPinyin(title)
         print(f"{title}    : {sorttitle}")
         sorttitle = urllib.parse.quote(sorttitle.encode('utf-8'))
-        fetchPlexApi(
-            host=self.host,
-            token=self.token,
-            path=f"/library/sections/{libraryid}/all?"
-                 f"type={self.actionType}&id={ratingkey}&titleSort.value={sorttitle}&",
-            method="PUT"
+        path = f"{self.host}/library/sections/{libraryid}/all?" \
+               f"type={self.actionType}&id={ratingkey}&titleSort.value={sorttitle}&"
+        requests.put(
+            url=path,
+            headers={'X-Plex-Token': self.token, 'Accept': 'application/json'}
         )
 
     def __updataGenre(self, libraryid, ratingkey, title, genre):
@@ -138,10 +84,13 @@ class PLEX:
                 print(f"{title}    : {enggenre} → {zh_query}")
                 zh_query = urllib.parse.quote(zh_query.encode('utf-8'))
                 enggenre = urllib.parse.quote(enggenre.encode('utf-8'))
-                path = f"/library/sections/{libraryid}/all?" \
+                path = f"{self.host}/library/sections/{libraryid}/all?" \
                        f"type=1&id={ratingkey}&" \
                        f"genre%5B2%5D.tag.tag={zh_query}&genre%5B%5D.tag.tag-={enggenre}&"
-                fetchPlexApi(self.token, self.host, path, "PUT")
+                requests.put(
+                    url=path,
+                    headers={'X-Plex-Token': self.token, 'Accept': 'application/json'}
+                )
             else:
                 print(f"请在 TAGS 字典中，为 {enggenre} 标签添加对应的中文。")
 
@@ -151,9 +100,12 @@ class PLEX:
         """
         todo, start, size = 1, 0, 100
         while todo != 0:
-            path = f'/library/sections/{libraryid}/all?' \
+            path = f'{self.host}/library/sections/{libraryid}/all?' \
                    f'type={self.actionType}&X-Plex-Container-Start={start}&X-Plex-Container-Size={size}'
-            metadata: dict = fetchPlexApi(self.token, self.host, path)
+            metadata: dict = requests.get(
+                url=path,
+                headers={'X-Plex-Token': self.token, 'Accept': 'application/json'}
+            ).json()
 
             total_size = metadata["MediaContainer"]["totalSize"]
             offset = metadata["MediaContainer"]["offset"]
@@ -175,13 +127,12 @@ class PLEX:
 
 if __name__ == '__main__':
 
-    URL = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400/ )：') or "http://192.168.168.1:32400/"
+    URL = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://192.168.168.1:32400"
     TOKEN = input('请输入你的 TOKEN：') or "97TexhuA_rnUbNJgpFSu"
     TYPE = input('请输入操作的库类型，1为电影，2为电视剧：') or 1
 
     server = PLEX(URL, TOKEN, TYPE)
     print(server.listLibrary())
-    sectionId = input("选择要操作的库的 ID 数字:")
+    sectionId = input("选择要操作的库的 ID 数字:") or 1
 
     server.LoopAll(sectionId)
-
