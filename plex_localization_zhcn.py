@@ -1,4 +1,5 @@
-## python 3
+# python 3.9
+
 import urllib
 from urllib import parse
 import pypinyin
