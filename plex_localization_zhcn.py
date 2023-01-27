@@ -61,7 +61,7 @@ class PLEX:
         sections = [None]
         if self.actionType == 1:
             sections = [section for section in plex.library.sections() if section.type == "movie"]
-        elif self.actionType == 2:
+        else:
             sections = [section for section in plex.library.sections() if section.type == "show"]
         return sections
 
