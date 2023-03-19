@@ -1,7 +1,6 @@
 ## python 3
 # pip install plexapi
 # pip install pypinyin
-# 更多中文插件请访问plexmedia.cn
 
 import urllib
 import http.client
@@ -24,7 +23,7 @@ def fetchPlexApi(path='', method='GET', getFormPlextv=False, token=PLEX_TOKEN, p
             url = 'plex.tv'        
             connection = http.client.HTTPSConnection(url)
         else:
-            url = PLEX_URL.rstrip('/').replace('http://','')     
+            url = PLEX_URL.rstrip('/').replace('http://','')
             connection = http.client.HTTPConnection(url)
         try:
             if method.upper() == 'GET':
@@ -40,7 +39,6 @@ def fetchPlexApi(path='', method='GET', getFormPlextv=False, token=PLEX_TOKEN, p
                 print("Invalid request method provided: {method}".format(method=method))
                 connection.close()
                 return
-
             connection.request(method.upper(), path , params, headers)     
             response = connection.getresponse()         
             r = response.read()             
@@ -64,7 +62,11 @@ def fetchPlexApi(path='', method='GET', getFormPlextv=False, token=PLEX_TOKEN, p
 
 def updateSortTitle(rating,item):
     sortQuery =urllib.parse.quote(item.encode('utf-8'))                                
-    data = fetchPlexApi("/library/sections/"+sectionNum+"/all?type=1&id=%s&titleSort.value=%s&"%(rating,sortQuery), "PUT",token=PLEX_TOKEN) 
+    data = fetchPlexApi("/library/sections/"+sectionNum+"/all?type=1&id=%s&titleSort.value=%s&"%(rating,sortQuery), "PUT",token=PLEX_TOKEN)
+
+def updateShowSortTitle(rating,item):
+    sortQuery =urllib.parse.quote(item.encode('utf-8'))
+    data = fetchPlexApi("/library/sections/"+sectionNum+"/all?type=2&id=%s&titleSort.value=%s&"%(rating,sortQuery), "PUT",token=PLEX_TOKEN)
 
 def uniqify(seq):
     # Not order preserving
@@ -116,24 +118,59 @@ def loopThroughAllMovies():
                 SortTitle = changepinyin(title)
                 print(title)
                 updateSortTitle(key, SortTitle)
-                
+def loopThroughAllShows():
+    toDo = True
+    start = 0
+    size = 100
+    while toDo:
+        if len(sectionNum):
+            url = "/library/sections/" + sectionNum + "/all?type=2&X-Plex-Container-Start=%i&X-Plex-Container-Size=%i" % (start, size)
+            metadata = fetchPlexApi(url,token=PLEX_TOKEN)
+            container = metadata["MediaContainer"]
+            elements = container["Metadata"]
+            totalSize = container["totalSize"]
+            offset = container["offset"]
+            size = container["size"]
+            start = start + size
+            if totalSize-offset-size == 0:
+                toDo = False
+            #    print(toDo)
+            # loop through all elements
+            for movie in elements:
+                mediaType = movie["type"]
+                if mediaType != "show":
+                    continue
+                if 'titleSort' in movie:                        #判断是否已经有标题
+                    con = movie["titleSort"]
+                    if (check_contain_chinese(con)):
+                        continue
+                    continue
+                key = movie["ratingKey"]
+                title = movie["title"]
+                SortTitle = changepinyin(title)
+                print(title)
+                updateShowSortTitle(key, SortTitle)
+
 if __name__ == '__main__':
 
     #got token.url
-    print("欢迎使用PLEX中文排序，使用方法请访问：")
+    print("欢迎使用PLEX中文排序")
     PLEX_URL = input('请输入你的plex服务器地址：')
     PLEX_TOKEN = input('请输入你的token：')
     # the plex server url
     plex = PlexServer(PLEX_URL, PLEX_TOKEN)
     for section in plex.library.sections():
-            if section.type == 'movie':
+            if section.type == 'movie' or section.type == 'show':
                print(section)
 
     #choose list
-    sectionNum = input('请输入你要排序的电影库编号：')
+    sectionNum = input('请输入你要排序的影视库编号：')
     
 
     # run at startup
-    loopThroughAllMovies()
+    try:
+        loopThroughAllMovies()
+    except:
+        loopThroughAllShows()
     
 
