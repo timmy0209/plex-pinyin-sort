@@ -1,10 +1,13 @@
 # python 3.9
 import sys
 import time
-import urllib
 from urllib import parse
+from configparser import ConfigParser
 import pypinyin
 import requests
+from pathlib import Path
+
+iniflie: Path = Path(__file__).parent / 'config.ini'
 
 tags = {
     "Anime": "动画",     "Action": "动作",     "Mystery": "悬疑",     "Tv Movie":  "电视",     "Animation":       "动画",
@@ -36,16 +39,54 @@ def convertToPinyin(text):
     return ''.join(str_b)
 
 
-class PLEX:
+class plexserver:
 
-    def __init__(self, host: str, token: str):
-        """
-        :param host: 可访问的 plex 服务器地址。例如 http://127.0.0.1:32400/
-        :param token: 服务器的 token
-        """
-        self.host = host
-        self.token = token
+    def __init__(self):
+
+        cfg = ConfigParser()
+        try:
+            with open(iniflie, 'r') as f:
+                cfg.read(f)
+            config = dict(cfg.items("server"))
+            self.host = config["host"]
+            self.token = config["token"]
+        except:
+            print("\n[WARNING] 未找到配置文件，请手动输入。\n")
+            self.host = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
+            self.token = input(
+                '请输入你的 TOKEN'
+                '（如果是windows服务器，可查看注册表\"计算机\HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server\"）\n'
+                '请输入：'
+            )
+
+        if self.host[-1] == "/":
+            self.host = self.host[:-1]
+        print(self.host)
+
+        try:
+            friendlyName = requests.get(
+                url=self.host,
+                headers={'X-Plex-Token': self.token, 'Accept': 'application/json'}
+            ).json()['MediaContainer']['friendlyName']
+            yesno = input(f"已成功连接到服务器{friendlyName}，是否将配置写入文件保存？（y/n）")
+        except:
+            print("\n[WARNING] 服务器连接不成功，请检查配置文件是否正确。\n")
+            time.sleep(15)
+            sys.exit()
+
+        try:
+            if yesno == "y":
+                cfg.add_section("server")
+                cfg.set("server", "host", self.host)
+                cfg.set("server", "token", self.token)
+                with open(iniflie, 'w') as f:
+                    cfg.write(f)
+                print(f"\n[INFO] 配置文件已写入{iniflie}\n")
+        except:
+            print("\n[WARNING] 配置文件写入失败\n")
+
         self.actionType = None
+
 
     def listLibrary(self):
         """列出库"""
@@ -69,7 +110,7 @@ class PLEX:
         """如果标题排序为中文或为空，则将标题排序转换为中文首字母。"""
         sorttitle = convertToPinyin(title)
         print(f"{title} < {sorttitle} >")
-        sorttitle = urllib.parse.quote(sorttitle.encode('utf-8'))
+        sorttitle = parse.quote(sorttitle.encode('utf-8'))
         requests.put(
             url=f"{self.host}/library/sections/{libraryid}/all",
             headers={'X-Plex-Token': self.token, 'Accept': 'application/json'},
@@ -91,8 +132,8 @@ class PLEX:
             zh_query = tags.get(tag["tag"])
             if zh_query:
                 print(f"{title} : {enggenre} → {zh_query}")
-                zh_query = urllib.parse.quote(zh_query.encode('utf-8'))
-                enggenre = urllib.parse.quote(enggenre.encode('utf-8'))
+                zh_query = parse.quote(zh_query.encode('utf-8'))
+                enggenre = parse.quote(enggenre.encode('utf-8'))
                 path = f"{self.host}/library/sections/{libraryid}/all?" \
                        f"type=1&id={ratingkey}&" \
                        f"genre%5B2%5D.tag.tag={zh_query}&genre%5B%5D.tag.tag-={enggenre}&"
@@ -138,7 +179,4 @@ class PLEX:
 
 
 if __name__ == '__main__':
-    URL = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
-    TOKEN = input('请输入你的 TOKEN：\n可查看windows注册表\"计算机\HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server\"')
-    server = PLEX(URL, TOKEN)
-    server.LoopAll()
+    plexserver().LoopAll()
