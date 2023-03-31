@@ -55,23 +55,29 @@ class PLEX:
         """
         sections = None
         plex = PlexServer(self.host, self.token)
-        print(self.actionType)
         if int(self.actionType) == 1:
             sections = [section for section in plex.library.sections() if section.type == "movie"]
         elif int(self.actionType) == 2:
             sections = [section for section in plex.library.sections() if section.type == "show"]
+        elif int(self.actionType) == 3:
+            sections = [section for section in plex.library.sections() if section.type == "artist"]
         return sections
 
     def __convertSortTitle(self, libraryid, ratingkey, title):
         """如果标题排序为中文或为空，则将标题排序转换为中文首字母。"""
         sorttitle = convertToPinyin(title)
-        print(f"{title}    : {sorttitle}")
+        print(f"{title} < {sorttitle} >")
         sorttitle = urllib.parse.quote(sorttitle.encode('utf-8'))
-        path = f"{self.host}/library/sections/{libraryid}/all?" \
-               f"type={self.actionType}&id={ratingkey}&titleSort.value={sorttitle}&"
         requests.put(
-            url=path,
-            headers={'X-Plex-Token': self.token, 'Accept': 'application/json'}
+            url=f"{self.host}/library/sections/{libraryid}/all",
+            headers={'X-Plex-Token': self.token, 'Accept': 'application/json'},
+            params={
+                "type":{self.actionType},
+                "id":{ratingkey},
+                "includeExternalMedia":1,
+                "titleSort.value":{sorttitle},
+                "titleSort.locked": 1
+            }
         )
 
     def __updataGenre(self, libraryid, ratingkey, title, genre):
@@ -82,7 +88,7 @@ class PLEX:
                 continue
             zh_query = tags.get(tag["tag"])
             if zh_query:
-                print(f"{title}    : {enggenre} → {zh_query}")
+                print(f"{title} : {enggenre} → {zh_query}")
                 zh_query = urllib.parse.quote(zh_query.encode('utf-8'))
                 enggenre = urllib.parse.quote(enggenre.encode('utf-8'))
                 path = f"{self.host}/library/sections/{libraryid}/all?" \
@@ -115,6 +121,8 @@ class PLEX:
             start = start + size
             todo = total_size - offset - size
 
+            print(metadata["MediaContainer"])
+
             for media in metadata["MediaContainer"]["Metadata"]:
                 ratingkey = media["ratingKey"]
                 title = media["title"]
@@ -131,9 +139,9 @@ if __name__ == '__main__':
     URL = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
     TOKEN = input('请输入你的 TOKEN：')
     TYPE = input('请输入操作的库类型，1为电影，2为电视剧：') or 1
-
     server = PLEX(URL, TOKEN, TYPE)
     print(server.listLibrary())
+
     sectionId = input("选择要操作的库的 ID 数字:")
 
     server.LoopAll(sectionId)
