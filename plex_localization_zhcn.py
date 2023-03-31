@@ -121,7 +121,7 @@ class PLEX:
             start = start + size
             todo = total_size - offset - size
 
-            print(metadata["MediaContainer"])
+            # print(metadata["MediaContainer"])
 
             for media in metadata["MediaContainer"]["Metadata"]:
                 ratingkey = media["ratingKey"]
