@@ -1,9 +1,9 @@
 # python 3.9
-
+import sys
+import time
 import urllib
 from urllib import parse
 import pypinyin
-from plexapi.server import PlexServer
 import requests
 
 tags = {
@@ -17,51 +17,53 @@ tags = {
 }
 
 
-def isChinese(text):
-    """判断字符串是否为中文字符"""
-    if text == "":
+def hasChinese(text):
+    """判断标题是否需要修改"""
+    if text:
+        for ch in text:
+            if '\u4e00' <= ch <= '\u9fff':
+                return True
+            else:
+                return False
+    else:
         return True
-    for ch in text:
-        if '\u4e00' <= ch <= '\u9fff':
-            return True
-    return False
 
 
 def convertToPinyin(text):
     """将字符串转换为拼音首字母形式。"""
     str_a = pypinyin.pinyin(text, style=pypinyin.FIRST_LETTER)
-    str_b = []
-    for i in range(len(str_a)):
-        str_b.append(str(str_a[i][0]).upper())
-    str_c = ''.join(str_b)
-    return str_c
+    str_b = [str(str_a[i][0]).upper() for i in range(len(str_a))]
+    return ''.join(str_b)
 
 
 class PLEX:
 
-    def __init__(self, host: str, token: str, actionType: int):
+    def __init__(self, host: str, token: str):
         """
         :param host: 可访问的 plex 服务器地址。例如 http://127.0.0.1:32400/
         :param token: 服务器的 token
-        :param actionType: 操作模式。 1为电影；2为电视剧。
         """
         self.host = host
         self.token = token
-        self.actionType = actionType
+        self.actionType = None
 
     def listLibrary(self):
-        """
-        列出库。
-        """
-        sections = None
-        plex = PlexServer(self.host, self.token)
-        if int(self.actionType) == 1:
-            sections = [section for section in plex.library.sections() if section.type == "movie"]
-        elif int(self.actionType) == 2:
-            sections = [section for section in plex.library.sections() if section.type == "show"]
-        elif int(self.actionType) == 3:
-            sections = [section for section in plex.library.sections() if section.type == "artist"]
-        return sections
+        """列出库"""
+        data = requests.get(
+            url=f"{self.host}/library/sections/",
+            headers={'X-Plex-Token': self.token, 'Accept': 'application/json'},
+        ).json().get("MediaContainer", {}).get("Directory", [])
+        library = ["{}> {}: {}".format(i, data[i]["type"], data[i]["title"]) for i in range(len(data))]
+        index = int(input("\n".join(library) + "\n请选择要操作的库："))
+        if data[index]['type'] == "movie":
+            self.actionType = 1
+        elif data[index]['type'] == "show":
+            self.actionType = 2
+        else:
+            print("暂不支持" + data[index]['type'] + "类型, 5 秒后关闭")
+            time.sleep(5)
+            sys.exit()
+        return data[index]['key']
 
     def __convertSortTitle(self, libraryid, ratingkey, title):
         """如果标题排序为中文或为空，则将标题排序转换为中文首字母。"""
@@ -84,7 +86,7 @@ class PLEX:
         """变更分类标签。"""
         for tag in genre:
             enggenre = tag["tag"]
-            if isChinese(enggenre):
+            if hasChinese(enggenre):
                 continue
             zh_query = tags.get(tag["tag"])
             if zh_query:
@@ -101,13 +103,14 @@ class PLEX:
             else:
                 print(f"请在 TAGS 字典中，为 {enggenre} 标签添加对应的中文。")
 
-    def LoopAll(self, libraryid):
+    def LoopAll(self):
         """
         遍历指定媒体库中的每一个媒体。
         """
+        key = self.listLibrary()
         todo, start, size = 1, 0, 100
         while todo != 0:
-            path = f'{self.host}/library/sections/{libraryid}/all?' \
+            path = f'{self.host}/library/sections/{key}/all?' \
                    f'type={self.actionType}&X-Plex-Container-Start={start}&X-Plex-Container-Size={size}'
             metadata: dict = requests.get(
                 url=path,
@@ -128,20 +131,14 @@ class PLEX:
                 title = media["title"]
                 titlesort = media.get("titleSort", "")
                 genre = media.get('Genre')
-                if isChinese(titlesort):
-                    self.__convertSortTitle(libraryid, ratingkey, title)
+                if hasChinese(titlesort):
+                    self.__convertSortTitle(key, ratingkey, title)
                 if genre:
-                    self.__updataGenre(libraryid, ratingkey, title, genre)
+                    self.__updataGenre(key, ratingkey, title, genre)
 
 
 if __name__ == '__main__':
-
     URL = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
-    TOKEN = input('请输入你的 TOKEN：')
-    TYPE = input('请输入操作的库类型，1为电影，2为电视剧：') or 1
-    server = PLEX(URL, TOKEN, TYPE)
-    print(server.listLibrary())
-
-    sectionId = input("选择要操作的库的 ID 数字:")
-
-    server.LoopAll(sectionId)
+    TOKEN = input('请输入你的 TOKEN：\n可查看windows注册表\"计算机\HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server\"')
+    server = PLEX(URL, TOKEN)
+    server.LoopAll()
