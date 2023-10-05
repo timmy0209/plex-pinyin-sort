@@ -11,7 +11,7 @@ plex 的中文电影默认排序是按照笔画数排的，对检索中文电影
 
 # 第三方模块依赖
 
-    pip install pypinyin
+    pip install pypinyin requests
 
 # 一般运行
 直接执行即可，通过命令行交互进行选择：
