@@ -216,7 +216,7 @@ class PlexServer:
             thread_count = int(thread_count if thread_count else 2)
 
         if library_id == 999:
-            libraries = self.list_libraries()
+            libraries = self.list_libraries().values()
 
             t = time.time()
 
