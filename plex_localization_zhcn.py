@@ -64,36 +64,41 @@ def convert_to_pinyin(text):
 
 class PlexServer:
 
-    def __init__(self):
+    def __init__(self, host=None, token=None):
         cfg = ConfigParser()
         self.s = requests.session()
 
-        try:
-            cfg.read(config_file)
-            self.host = dict(cfg.items("server"))["host"]
-            self.token = dict(cfg.items("server"))["token"]
+        if host and token:
+            self.host = host
+            self.token = token
             print(f"已成功连接到服务器{self.login()}")
-        except Exception as error:
-            print(error)
-            print("\n[WARNING] 配置文件读取失败，开始创建配置文件：\n")
-            self.host = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
-            if self.host[-1] == "/":
-                self.host = self.host[:-1]
-            self.token = input(
-                '请输入你的 TOKEN'
-                r'（如果是windows服务器，可查看注册表\"计算机\HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server\"）\n'
-                '请输入：'
-            )
+        else:
             try:
-                cfg.add_section("server")
-                cfg.set("server", "host", self.host)
-                cfg.set("server", "token", self.token)
-                with open(config_file, 'w') as f:
-                    cfg.write(f)
-                print(f"\n[INFO] 配置文件已写入 {config_file} \n")
+                cfg.read(config_file)
+                self.host = dict(cfg.items("server"))["host"]
+                self.token = dict(cfg.items("server"))["token"]
+                print(f"已成功连接到服务器{self.login()}")
             except Exception as error:
                 print(error)
-                print("\n[WARNING] 配置文件写入失败\n")
+                print("\n[WARNING] 配置文件读取失败，开始创建配置文件：\n")
+                self.host = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
+                if self.host[-1] == "/":
+                    self.host = self.host[:-1]
+                self.token = input(
+                    '请输入你的 TOKEN'
+                    r'（如果是windows服务器，可查看注册表\"计算机\HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server\"）\n'
+                    '请输入：'
+                )
+                try:
+                    cfg.add_section("server")
+                    cfg.set("server", "host", self.host)
+                    cfg.set("server", "token", self.token)
+                    with open(config_file, 'w') as f:
+                        cfg.write(f)
+                    print(f"\n[INFO] 配置文件已写入 {config_file} ，请重新运行脚本。\n")
+                except Exception as error:
+                    print(error)
+                    print("\n[WARNING] 配置文件写入失败\n")
 
     def login(self):
         try:
@@ -268,4 +273,5 @@ class PlexServer:
 
 
 if __name__ == '__main__':
+    # PlexServer('http://192.168.3.2:32400', 'cRBnx9eQDgGy9zs4G-7F').loop_all(1, 1, 1)
     PlexServer().loop_all()
