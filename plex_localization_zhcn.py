@@ -273,5 +273,8 @@ class PlexServer:
 
 
 if __name__ == '__main__':
-    # PlexServer('http://192.168.3.2:32400', 'cRBnx9eQDgGy9zs4G-7F').loop_all(1, 1, 1)
-    PlexServer().loop_all()
+    if arg := sys.argv:
+        # 示例 python plex_localization_zhcn.py http://192.168.3.2:32400 cRBnx9eQDgGy9zs4G-7F 1 1 1
+        PlexServer(arg[1], arg[2]).loop_all(int(arg[3]), int(arg[4]), int(arg[5]))
+    else:
+        PlexServer().loop_all()
