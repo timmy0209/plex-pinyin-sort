@@ -23,6 +23,8 @@ TYPE = {"movie": 1, "show": 2, "artist": 8}
 
 config_file: Path = Path(__file__).parent / 'config.ini'
 
+SELECT = (None, None)
+
 def threads(datalist, func, thread_count):
     """
     多线程处理模块
