@@ -1,12 +1,11 @@
-# python 3.11
+# python 3.9
 import sys
 import time
+from configparser import ConfigParser
 import pypinyin
 import requests
-import concurrent.futures
-from configparser import ConfigParser
 from pathlib import Path
-
+import concurrent.futures
 
 TAGS = {
     "Anime": "动画", "Action": "动作", "Mystery": "悬疑", "Tv Movie": "电视", "Animation": "动画",
@@ -16,14 +15,14 @@ TAGS = {
     "Music": "音乐", "Sci-Fi": "科幻", "Western": "西部", "Children": "儿童", "Martial Arts": "功夫",
     "Drama": "剧情", "War": "战争", "Musical": "音乐", "Film-noir": "黑色", "Science Fiction": "科幻",
     "Food": "食物", "War & Politics": "战争与政治", "Sci-Fi & Fantasy": "科幻", "Mini-Series": "迷你剧",
-    "Rap": "说唱"
+    "Rap": "说唱", "Adult": "成人"
 }
-
-TYPE = {"movie": 1, "show": 2, "artist": 8}
 
 config_file: Path = Path(__file__).parent / 'config.ini'
 
-SELECT = (None, None)
+types = {"movie": 1, "show": 2, "artist": 8, "album": 9, 'track': 10}
+TYPES = {"movie": [1], "show": [2], "artist": [8, 9, 10]}
+
 
 def threads(datalist, func, thread_count):
     """
@@ -41,9 +40,10 @@ def threads(datalist, func, thread_count):
 
     chunk_size = (len(datalist) + thread_count - 1) // thread_count  # 计算每个线程需要处理的元素数量
     list_chunks = list(chunks(datalist, chunk_size))  # 将 datalist 切分成 n 段
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
         result_items = list(executor.map(func, [item for chunk in list_chunks for item in chunk]))
-        
+
     return result_items
 
 
@@ -81,7 +81,8 @@ class PlexServer:
             except Exception as error:
                 print(error)
                 print("\n[WARNING] 配置文件读取失败，开始创建配置文件：\n")
-                self.host = input('请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
+                self.host = input(
+                    '请输入你的 PLEX 服务器地址 ( 例如 http://127.0.0.1:32400 )：') or "http://127.0.0.1:32400"
                 if self.host[-1] == "/":
                     self.host = self.host[:-1]
                 self.token = input(
@@ -111,38 +112,49 @@ class PlexServer:
             time.sleep(10)
             return sys.exit()
 
-    def select_library(self):
+    def list_libraries(self):
+        data = self.s.get(url=f"{self.host}/library/sections/").json().get("MediaContainer", {}).get("Directory", [])
+
+        return {
+            int(x['key']): (int(x['key']), TYPES[x['type']], x['title'], x['type'])
+            for x in data
+            if x['type'] != 'photo'  # 排除照片库
+        }
+
+    def select_library(self, index=None):
         """列出并选择库"""
-        data = self.s.get(
-            url=f"{self.host}/library/sections/"
-        ).json().get("MediaContainer", {}).get("Directory", [])
+        libraries = self.list_libraries()
 
-        library = [
-            "{}> {}".format(i, data[i]["title"])
-            for i in range(len(data))
-        ]
+        echo = [f"{library[0]}> {library[2]} <{library[3]}>" for library in libraries.values()]
 
-        index = int(input("\n".join(library) + "\n请选择库："))
-        action_key = data[index]['key']
-        action_type = int(input("\n1> 电影\n2> 节目\n8> 艺术家\n9> 专辑\n10> 单曲\n请选择要操作的类型："))
+        index = index if index else int(input("\n" + "\n".join(echo) + "\n请选择库："))
+
+        action_key, action_type = index, libraries[index][1]
 
         return action_key, action_type
 
-    def list_media_keys(self, select):
-        datas = \
-            self.s.get(url=f'{self.host}/library/sections/{select[0]}/all?type={select[1]}').json()["MediaContainer"][
-                "Metadata"]
-        media_keys = [data["ratingKey"] for data in datas]
-        print(F"共计{len(media_keys)}个媒体")
-        return media_keys
+    def list_keys(self, select, is_coll: bool):
+        types_index = {value: key for key, value in types.items()}
+
+        endpoint = f'sections/{select[0]}/collections' if is_coll else f'sections/{select[0]}/all?type={select[1]}'
+        datas = self.s.get(f'{self.host}/library/{endpoint}').json().get("MediaContainer", {}).get("Metadata", [])
+        keys = [data.get("ratingKey") for data in datas]
+
+        if len(keys):
+            if is_coll:
+                print(F"\n<{types_index[select[1]]}> 类型共计{len(keys)}个合集")
+            else:
+                print(F"\n<{types_index[select[1]]}> 类型共计{len(keys)}个媒体")
+
+        return keys
 
     def get_metadata(self, rating_key):
-        metadata = self.s.get(url=f'{self.host}/library/metadata/{rating_key}').json()["MediaContainer"]["Metadata"][0]
-        return metadata
+        return self.s.get(url=f'{self.host}/library/metadata/{rating_key}').json()["MediaContainer"]["Metadata"][0]
 
-    def put_title_sort(self, select, rating_key, sort_title, lock):
+    def put_title_sort(self, select, rating_key, sort_title, lock, is_coll: bool):
+        endpoint = f'library/metadata/{rating_key}' if is_coll else f'library/sections/{select[0]}/all'
         self.s.put(
-            url=f"{self.host}/library/sections/{select[0]}/all",
+            url=f"{self.host}/{endpoint}",
             params={
                 "type": select[1],
                 "id": rating_key,
@@ -152,133 +164,89 @@ class PlexServer:
             }
         )
 
-    def put_genres(self, select, rating_key, tag, addtag):
-        """变更分类标签。"""
-        res = self.s.put(url=f"{self.host}/library/sections/{select[0]}/all",
-                         params={
-                             "type": select[1],
-                             "id": rating_key,
-                             "genre.locked": 1,
-                             "genre[0].tag.tag": addtag,
-                             "genre[].tag.tag-": tag
-                         }).text
-        return res
+    def put_tag(self, select, rating_key, tag, addtag, tag_type, title):
+        self.s.put(
+            url=f"{self.host}/library/sections/{select[0]}/all",
+            params={
+                "type": select[1],
+                "id": rating_key,
+                f"{tag_type}.locked": 1,
+                f"{tag_type}[0].tag.tag": addtag,
+                f"{tag_type}[].tag.tag-": tag
+            }
+        )
+        print(f"{title} : {tag} → {addtag}")
 
-    def put_styles(self, select, rating_key, tag, addtag):
-        """变更风格标签。"""
-        res = self.s.put(url=f"{self.host}/library/sections/{select[0]}/all",
-                         params={
-                             "type": select[1],
-                             "id": rating_key,
-                             "style.locked": 1,
-                             "style[0].tag.tag": addtag,
-                             "style[].tag.tag-": tag
-                         }).text
-        return res
-
-    def put_mood(self, select, rating_key, tag, addtag):
-        """变更情绪标签。"""
-        res = self.s.put(url=f"{self.host}/library/sections/{select[0]}/all",
-                         params={
-                             "type": select[1],
-                             "id": rating_key,
-                             "mood.locked": 1,
-                             "mood[0].tag.tag": addtag,
-                             "mood[].tag.tag-": tag
-                         }).text
-        return res
-
-    def do_item(self, rating_key):
+    def operate_item(self, rating_key):
 
         metadata = self.get_metadata(rating_key)
+
+        library_id = metadata['librarySectionID']
+
+        is_coll, type_id = (False, types[metadata['type']]) \
+            if metadata['type'] != 'collection' \
+            else (True, types[metadata['subtype']])
+
         title = metadata["title"]
         title_sort = metadata.get("titleSort", "")
-        genres = [genre.get("tag") for genre in metadata.get('Genre', {})]
-        styles = [style.get("tag") for style in metadata.get('Style', {})]
-        moods = [mood.get("tag") for mood in metadata.get('Mood', {})]
+        tags: dict[str:list] = {
+            'genre': [genre.get("tag") for genre in metadata.get('Genre', {})],  # 流派
+            'style': [style.get("tag") for style in metadata.get('Style', {})],  # 风格
+            'mood': [mood.get("tag") for mood in metadata.get('Mood', {})]  # 情绪
+        }
 
-        global SELECT
-        select = SELECT
+        select = library_id, type_id
 
-        if select[1] != 10:
-            if has_chinese(title_sort) or title_sort == "":
-                title_sort = convert_to_pinyin(title)
-                self.put_title_sort(select, rating_key, title_sort, 1)
-                print(f"{title} < {title_sort} >")
+        # 更新标题排序
+        if has_chinese(title_sort) or title_sort == "":
+            title_sort = convert_to_pinyin(title)
+            self.put_title_sort(select, rating_key, title_sort, 1, is_coll)
+            print(f"{title} < {title_sort} >")
 
-        if select[1] != 10:
-            for genre in genres:
-                if new_genre := TAGS.get(genre):
-                    self.put_genres(select, rating_key, genre, new_genre)
-                    print(f"{title} : {genre} → {new_genre}")
+        # 汉化标签
+        for tagtpye, tag_list in tags.items():
+            if tag_list:
+                for tag in tag_list:
+                    self.put_tag(select, rating_key, tag, newtag, tagtpye, title) if (newtag := TAGS.get(tag)) else None
 
-        if select[1] in [8, 9]:
-            for style in styles:
-                if new_style := TAGS.get(style):
-                    self.put_styles(select, rating_key, style, new_style)
-                    print(f"{title} : {style} → {new_style}")
+    def loop_all(self, library_id: int = None, thread_count: int = None):
+        """选择媒体库并遍历其中的每一个媒体。"""
+        if not thread_count:
+            thread_count = input("\n请输入运行的线程数（输入整数数字，默认为2）：")
+            thread_count = int(thread_count if thread_count else 2)
 
-        if select[1] in [8, 9, 10]:
-            for mood in moods:
-                if new_mood := TAGS.get(mood):
-                    self.put_styles(select, rating_key, mood, new_mood)
-                    print(f"{title} : {mood} → {new_mood}")
+        if library_id == 999:
+            libraries = self.list_libraries()
 
-    def loop_all(self):
-        """选择一个媒体库并遍历其中的每一个媒体。"""
+            t = time.time()
 
-        global SELECT
-        SELECT = self.select_library()
-        media_keys = self.list_media_keys(SELECT)
+            for library in libraries:
+                for type_id in library[1]:
+                    for is_coll in [False, True]:
+                        if keys := self.list_keys((library[0], type_id), is_coll):
+                            threads(keys, self.operate_item, thread_count)
 
-        thread_count = input("\n请输入运行的线程数（输入整数数字，默认为2）：")
-        thread_count = int(thread_count if thread_count else 2)
+            print(F'\n运行完毕，用时 {time.time() - t} 秒')
 
-        t = time.time()
-        threads(media_keys, self.do_item, thread_count)
+        else:
+            library_id, type_ids = self.select_library(library_id) if library_id else self.select_library()
 
-        # for rating_key in media_keys:
-        #     metadata = self.get_metadata(rating_key)
-        #     title = metadata["title"]
-        #     title_sort = metadata.get("titleSort", "")
-        #     genres = [genre.get("tag") for genre in metadata.get('Genre', {})]
-        #     styles = [style.get("tag") for style in metadata.get('Style', {})]
-        #     moods = [mood.get("tag") for mood in metadata.get('Mood', {})]
-        #
-        #     if select[1] != 10:
-        #         if has_chinese(title_sort) or title_sort == "":
-        #             title_sort = convert_to_pinyin(title)
-        #             self.put_title_sort(select, rating_key, title_sort, 1)
-        #             print(f"{title} < {title_sort} >")
-        #
-        #     if select[1] != 10:
-        #         for genre in genres:
-        #             if new_genre := TAGS.get(genre):
-        #                 self.put_genres(select, rating_key, genre, new_genre)
-        #                 print(f"{title} : {genre} → {new_genre}")
-        #
-        #     if select[1] in [8, 9]:
-        #         for style in styles:
-        #             if new_style := TAGS.get(style):
-        #                 self.put_styles(select, rating_key, style, new_style)
-        #                 print(f"{title} : {style} → {new_style}")
-        #
-        #     if select[1] in [8, 9, 10]:
-        #         for mood in moods:
-        #             if new_mood := TAGS.get(mood):
-        #                 self.put_styles(select, rating_key, mood, new_mood)
-        #                 print(f"{title} : {mood} → {new_mood}")
+            t = time.time()
 
-        print(F'运行完毕，用时 {time.time() - t} 秒')
+            for type_id in type_ids:
+                for is_coll in [False, True]:
+                    if keys := self.list_keys((library_id, type_id), is_coll):
+                        threads(keys, self.operate_item, thread_count)
+
+            print(F'\n运行完毕，用时 {time.time() - t} 秒')
 
 
 if __name__ == '__main__':
 
-    if len(arg := sys.argv) == 6:
-        PlexServer(arg[1], arg[2]).loop_all(int(arg[3]), int(arg[4]), int(arg[5]))
-    elif len(arg := sys.argv) == 5:
-        PlexServer(arg[1], arg[2]).loop_all(int(arg[3]), int(arg[4]), 2)
-    elif len(arg := sys.argv) == 3:
-        PlexServer(arg[1], arg[2]).loop_all()
+    if len(arg := sys.argv) == 5:
+        # 指定配置、库索引、线程数
+        PlexServer(arg[1], arg[2]).loop_all(int(arg[3]), int(arg[4]))
+    elif 1 < len(arg := sys.argv) < 5:
+        print('传入参数不完整。')
     else:
         PlexServer().loop_all()
