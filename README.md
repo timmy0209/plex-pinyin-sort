@@ -69,11 +69,11 @@ PLEX 对中文标题的媒体，默认按照笔画数排列，对检索中文电
     运行完毕，用时 0.7199623584747314 秒
   
 
-# Python 版本
+## Python 版本
 - 仅在 3.11 版本完成测试
 - 推测 >= 3.9 版本可以支持，但未经测试。
 
-# Todo
+## Todo
 
 - [x] 移除 plexapi 库依赖
 - [x] 更改排序为拼音后，锁定字段，避免刷新元数据时被更改
@@ -86,6 +86,11 @@ PLEX 对中文标题的媒体，默认按照笔画数排列，对检索中文电
 - [x] 增加命令行参数支持，以便于无人值守运行
 - [x] 增加所有库遍历运行
       
-# 如何查看 PLEX TOKEN
+## 如何查看 PLEX TOKEN
 
 - PLEX 服务器部署在 Windows 系统时，可通过注册表 `计算机\HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server` 中的 `PlexOnlineToken` 项来查看 TOKEN 值
+
+## 感谢
+
+- 该脚本参考了 [timmy0209](https://github.com/timmy0209) 的脚本 [plex-chinese-genre](https://github.com/timmy0209/plex-chinese-genre) 及 [plex-pinyin-sort](https://github.com/timmy0209/plex-pinyin-sort) 的思路，于此基础上整理重构而来。
+- 2023.10.05 参考了[x1ao4](https://github.com/x1ao4) 提供的合集相关代码。
