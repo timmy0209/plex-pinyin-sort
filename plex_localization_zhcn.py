@@ -1,10 +1,12 @@
 # python 3.11
 import sys
 import time
-from configparser import ConfigParser
 import pypinyin
 import requests
+import concurrent.futures
+from configparser import ConfigParser
 from pathlib import Path
+
 
 TAGS = {
     "Anime": "动画", "Action": "动作", "Mystery": "悬疑", "Tv Movie": "电视", "Animation": "动画",
@@ -20,6 +22,27 @@ TAGS = {
 TYPE = {"movie": 1, "show": 2, "artist": 8}
 
 config_file: Path = Path(__file__).parent / 'config.ini'
+
+def threads(datalist, func, thread_count):
+    """
+    多线程处理模块
+    :param datalist: 待处理数据列表
+    :param func: 处理函数
+    :param thread_count: 运行线程数
+    :return:
+    """
+
+    def chunks(lst, n):
+        """列表切片工具"""
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
+
+    chunk_size = (len(datalist) + thread_count - 1) // thread_count  # 计算每个线程需要处理的元素数量
+    list_chunks = list(chunks(datalist, chunk_size))  # 将 datalist 切分成 n 段
+    with concurrent.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
+        result_items = list(executor.map(func, [item for chunk in list_chunks for item in chunk]))
+        
+    return result_items
 
 
 def has_chinese(string):
@@ -158,43 +181,88 @@ class PlexServer:
                          }).text
         return res
 
+    def do_item(self, rating_key):
+
+        metadata = self.get_metadata(rating_key)
+        title = metadata["title"]
+        title_sort = metadata.get("titleSort", "")
+        genres = [genre.get("tag") for genre in metadata.get('Genre', {})]
+        styles = [style.get("tag") for style in metadata.get('Style', {})]
+        moods = [mood.get("tag") for mood in metadata.get('Mood', {})]
+
+        global SELECT
+        select = SELECT
+
+        if select[1] != 10:
+            if has_chinese(title_sort) or title_sort == "":
+                title_sort = convert_to_pinyin(title)
+                self.put_title_sort(select, rating_key, title_sort, 1)
+                print(f"{title} < {title_sort} >")
+
+        if select[1] != 10:
+            for genre in genres:
+                if new_genre := TAGS.get(genre):
+                    self.put_genres(select, rating_key, genre, new_genre)
+                    print(f"{title} : {genre} → {new_genre}")
+
+        if select[1] in [8, 9]:
+            for style in styles:
+                if new_style := TAGS.get(style):
+                    self.put_styles(select, rating_key, style, new_style)
+                    print(f"{title} : {style} → {new_style}")
+
+        if select[1] in [8, 9, 10]:
+            for mood in moods:
+                if new_mood := TAGS.get(mood):
+                    self.put_styles(select, rating_key, mood, new_mood)
+                    print(f"{title} : {mood} → {new_mood}")
+
     def loop_all(self):
         """选择一个媒体库并遍历其中的每一个媒体。"""
 
-        select = self.select_library()
-        media_keys = self.list_media_keys(select)
+        global SELECT
+        SELECT = self.select_library()
+        media_keys = self.list_media_keys(SELECT)
 
-        for rating_key in media_keys:
-            metadata = self.get_metadata(rating_key)
-            title = metadata["title"]
-            title_sort = metadata.get("titleSort", "")
-            genres = [genre.get("tag") for genre in metadata.get('Genre', {})]
-            styles = [style.get("tag") for style in metadata.get('Style', {})]
-            moods = [mood.get("tag") for mood in metadata.get('Mood', {})]
+        thread_count = input("\n请输入运行的线程数（输入整数数字，默认为2）：")
+        thread_count = int(thread_count if thread_count else 2)
 
-            if select[1] != 10:
-                if has_chinese(title_sort) or title_sort == "":
-                    title_sort = convert_to_pinyin(title)
-                    self.put_title_sort(select, rating_key, title_sort, 1)
-                    print(f"{title} < {title_sort} >")
+        t = time.time()
+        threads(media_keys, self.do_item, thread_count)
 
-            if select[1] != 10:
-                for genre in genres:
-                    if new_genre := TAGS.get(genre):
-                        self.put_genres(select, rating_key, genre, new_genre)
-                        print(f"{title} : {genre} → {new_genre}")
+        # for rating_key in media_keys:
+        #     metadata = self.get_metadata(rating_key)
+        #     title = metadata["title"]
+        #     title_sort = metadata.get("titleSort", "")
+        #     genres = [genre.get("tag") for genre in metadata.get('Genre', {})]
+        #     styles = [style.get("tag") for style in metadata.get('Style', {})]
+        #     moods = [mood.get("tag") for mood in metadata.get('Mood', {})]
+        #
+        #     if select[1] != 10:
+        #         if has_chinese(title_sort) or title_sort == "":
+        #             title_sort = convert_to_pinyin(title)
+        #             self.put_title_sort(select, rating_key, title_sort, 1)
+        #             print(f"{title} < {title_sort} >")
+        #
+        #     if select[1] != 10:
+        #         for genre in genres:
+        #             if new_genre := TAGS.get(genre):
+        #                 self.put_genres(select, rating_key, genre, new_genre)
+        #                 print(f"{title} : {genre} → {new_genre}")
+        #
+        #     if select[1] in [8, 9]:
+        #         for style in styles:
+        #             if new_style := TAGS.get(style):
+        #                 self.put_styles(select, rating_key, style, new_style)
+        #                 print(f"{title} : {style} → {new_style}")
+        #
+        #     if select[1] in [8, 9, 10]:
+        #         for mood in moods:
+        #             if new_mood := TAGS.get(mood):
+        #                 self.put_styles(select, rating_key, mood, new_mood)
+        #                 print(f"{title} : {mood} → {new_mood}")
 
-            if select[1] in [8, 9]:
-                for style in styles:
-                    if new_style := TAGS.get(style):
-                        self.put_styles(select, rating_key, style, new_style)
-                        print(f"{title} : {style} → {new_style}")
-
-            if select[1] in [8, 9, 10]:
-                for mood in moods:
-                    if new_mood := TAGS.get(mood):
-                        self.put_styles(select, rating_key, mood, new_mood)
-                        print(f"{title} : {mood} → {new_mood}")
+        print(F'运行完毕，用时 {time.time() - t} 秒')
 
 
 if __name__ == '__main__':
