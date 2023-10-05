@@ -57,3 +57,7 @@ plex 的中文电影默认排序是按照笔画数排的，对检索中文电影
 - [x] 增加音乐库 风格(style)标签 支持
 - [x] 增加多线程支持
 - [x] 增加命令行参数支持，以便于无人值守运行
+
+# 如何查看 PLEX TOKEN
+
+- PLEX 服务器部署在 Windows 系统时，可通过注册表 `计算机\HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server` 中的 `PlexOnlineToken` 项来查看 TOKEN 值
