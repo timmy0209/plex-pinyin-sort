@@ -127,7 +127,15 @@ class PlexServer:
 
         echo = [f"{library[0]}> {library[2]} <{library[3]}>" for library in libraries.values()]
 
-        index = index if index else int(input("\n" + "\n".join(echo) + "\n请选择库："))
+        if index:
+            pass
+        else:
+            while True:
+                try:
+                    index = int(input("\n" + "\n".join(echo) + "\n请选择库："))
+                    break
+                except ValueError:
+                    print("格式不正确，需要输入整数数字。")
 
         action_key, action_type = index, libraries[index][1]
 
@@ -211,9 +219,16 @@ class PlexServer:
 
     def loop_all(self, library_id: int = None, thread_count: int = None):
         """选择媒体库并遍历其中的每一个媒体。"""
-        if not thread_count:
-            thread_count = input("\n请输入运行的线程数（输入整数数字，默认为2）：")
-            thread_count = int(thread_count if thread_count else 2)
+
+        if thread_count:
+            pass
+        else:
+            while True:
+                try:
+                    thread_count = int(input("\n请输入运行的线程数（输入整数数字，默认为2）："))
+                    break
+                except ValueError:
+                    print("格式不正确，需要输入整数数字。")
 
         if library_id == 999:
             libraries = self.list_libraries().values()
